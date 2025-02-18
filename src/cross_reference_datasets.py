@@ -1,60 +1,223 @@
-import ast
-import os
-
 import pandas as pd
-from rapidfuzz import fuzz, process
+import uuid
+from fuzzywuzzy import fuzz
 
-DS_DIR = "../data"
-# Load both datasets
-df1 = pd.read_csv(DS_DIR + os.sep + "warning_letters" + os.sep + "warning_letters_with_metadata.csv")
-df2 = pd.read_csv(DS_DIR + os.sep + "NCR" + os.sep + "eudra_non_compliance_reports.csv")
+# Example "companies" table
+companies_data = [
+    {
+        "company_id": str(uuid.uuid4()),
+        "company_name": "ABC Pharma",
+        "address": "123 Main St",
+        "locality": "New York",
+        "region": "NY",
+        "postal_code": "10001",
+        "country": "USA",
+        "oms_organisation_id": None,
+        "oms_location_id": None
+    }
+]
 
-# Convert stringified dictionaries in df1["Company Info"] to actual dictionaries
-df1["Company Info"] = df1["Company Info"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
+# Example "Warning Letters" dataset
+warning_letters_data = [
+    {
+        "id": 1,
+        "Company Info": {
+            "recipient_name": "John Doe",
+            "recipient_title": "CEO",
+            "company_name": "ABC Pharma Inc.",
+            "address": "123 Main St",
+            "locality": "New York",
+            "region": "NY",
+            "postal_code": "10001",
+            "country": "USA"
+        },
+        "violation": "Failure to maintain laboratory control records"
+    },
+    {
+        "id": 2,
+        "Company Info": {
+            "recipient_name": "Jane Smith",
+            "recipient_title": "Director",
+            "company_name": "XYZ Biotech",
+            "address": "456 Elm St",
+            "locality": "San Francisco",
+            "region": "CA",
+            "postal_code": "94107",
+            "country": "USA"
+        },
+        "violation": "Inadequate documentation"
+    }
+]
 
-# Extract relevant fields from the dictionary
-df1["company_name"] = df1["Company Info"].apply(lambda x: x.get("company_name", "").lower().strip())
-df1["address"] = df1["Company Info"].apply(lambda x: x.get("address", "").lower().strip())
-df1["locality"] = df1["Company Info"].apply(lambda x: x.get("locality", "").lower().strip())
-df1["region"] = df1["Company Info"].apply(lambda x: x.get("region", "").lower().strip())
-df1["postal_code"] = df1["Company Info"].apply(lambda x: x.get("postal_code", "").lower().strip())
-df1["country"] = df1["Company Info"].apply(lambda x: x.get("country", "").lower().strip())
+# Example "Eudra Non-Compliance Reports" dataset
+eudra_data = [
+    {
+        "Report Number": "RPT-001",
+        "EudraGMDP Document Reference Number": "DOC-001",
+        "WDA No./API Reg.No.": "WDA-001",
+        "OMS Organisation Identifier": "ORG-12345",
+        "OMS Location Identifier": "LOC-54321",
+        "Site Name": "XYZ Biotech",
+        "Site Address": "456 Elm St",
+        "City": "San Francisco",
+        "Postcode": "94107",
+        "Country": "USA",
+        "Inspection End Date": "2025-01-15",
+        "Issue Date": "2025-02-01"
+    }
+]
 
-# Standardize df2 fields
-df2["Site Name"] = df2["Site Name"].str.lower().str.strip()
-df2["Site Address"] = df2["Site Address"].str.lower().str.strip()
-df2["City"] = df2["City"].str.lower().str.strip()
-df2["Postcode"] = df2["Postcode"].str.lower().str.strip()
-df2["Country"] = df2["Country"].str.lower().str.strip()
+# Convert datasets to pandas DataFrames
+companies_df = pd.DataFrame(companies_data)
+warning_letters_df = pd.DataFrame(warning_letters_data)
+eudra_df = pd.DataFrame(eudra_data)
 
-# Function to compute a weighted match score
-def get_match_score(row, df2):
-    best_match = process.extractOne(row["company_name"], df2["Site Name"], scorer=fuzz.partial_ratio)
+# Function to normalize text
+def normalize_text(text):
+    if not isinstance(text, str):
+        return ""
+    return ''.join(e for e in text.lower() if e.isalnum() or e.isspace()).strip()
 
-    if best_match and best_match[1] >= 80:  # Name similarity must be at least 80%
-        matched_site = best_match[0]
-        matched_row = df2[df2["site_name"] == matched_site].iloc[0]
+# Function to generate a unique company ID
+def generate_company_id():
+    return str(uuid.uuid4())
 
-        # Score components (higher weight for company name and country)
-        name_score = best_match[1] * 0.6
-        country_score = 20 if row["country"] == matched_row["Country"] else 0
-        city_score = 10 if row["locality"] and row["locality"] == matched_row["City"] else 0
-        postcode_score = 10 if row["postal_code"] and row["postal_code"] == matched_row["Postcode"] else 0
+# Function to compute similarity between two company records
+def is_similar(company_info, company_row, threshold=85):
+    # Normalize fields for comparison
+    company_name_sim = fuzz.ratio(
+        normalize_text(company_info["company_name"]),
+        normalize_text(company_row["company_name"])
+    )
+    address_sim = fuzz.ratio(
+        normalize_text(company_info["address"]),
+        normalize_text(company_row["address"])
+    )
+    locality_sim = fuzz.ratio(
+        normalize_text(company_info["locality"]),
+        normalize_text(company_row["locality"])
+    )
+    region_sim = fuzz.ratio(
+        normalize_text(company_info["region"]),
+        normalize_text(company_row["region"])
+    )
+    postal_code_sim = fuzz.ratio(
+        normalize_text(company_info["postal_code"]),
+        normalize_text(company_row["postal_code"])
+    )
+    country_sim = fuzz.ratio(
+        normalize_text(company_info["country"]),
+        normalize_text(company_row["country"])
+    )
 
-        total_score = name_score + country_score + city_score + postcode_score
+    # Compute overall similarity (weighted average)
+    overall_similarity = (
+        company_name_sim * 0.4 +
+        address_sim * 0.3 +
+        locality_sim * 0.1 +
+        region_sim * 0.1 +
+        postal_code_sim * 0.05 +
+        country_sim * 0.05
+    )
 
-        if total_score >= 85:  # Only accept strong matches
-            return matched_site
+    return overall_similarity >= threshold
 
-    return None
+# Function to cross-reference Warning Letters dataset
+def cross_reference_warning_letters(warning_letters_df, companies_df):
+    # Extract company info from warning letters
+    company_info_list = warning_letters_df["Company Info"].apply(pd.Series)
 
-# Apply fuzzy matching
-df1["matched_site_name"] = df1.apply(lambda row: get_match_score(row, df2), axis=1)
+    # Add a column for company_id in the warning letters dataset
+    warning_letters_df["company_id"] = None
 
-# Merge on matched names
-merged_df = df1.merge(df2, left_on="matched_site_name", right_on="Site Name", how="left")
+    # Iterate through each company in the warning letters dataset
+    for index, company_info in company_info_list.iterrows():
+        matched = False
 
-# Save results
-merged_df.to_csv("merged_companies.csv", index=False)
+        # Check for matches in the companies table
+        for _, company_row in companies_df.iterrows():
+            if is_similar(company_info, company_row):
+                # If a match is found, assign the existing company_id
+                warning_letters_df.at[index, "company_id"] = company_row["company_id"]
+                matched = True
+                break
 
-print("Matching complete! Results saved to 'merged_companies.csv'")
+        if not matched:
+            # If no match is found, create a new company entry
+            new_company_id = generate_company_id()
+            warning_letters_df.at[index, "company_id"] = new_company_id
+
+            # Add the new company to the companies table
+            new_company = {
+                "company_id": new_company_id,
+                "company_name": company_info["company_name"],
+                "address": company_info["address"],
+                "locality": company_info["locality"],
+                "region": company_info["region"],
+                "postal_code": company_info["postal_code"],
+                "country": company_info["country"],
+                "oms_organisation_id": None,
+                "oms_location_id": None
+            }
+            companies_df = pd.concat([companies_df, pd.DataFrame([new_company])], ignore_index=True)
+
+    return warning_letters_df, companies_df
+
+# Function to cross-reference Eudra dataset
+def cross_reference_eudra(eudra_df, companies_df):
+    # Add a column for company_id in the Eudra dataset
+    eudra_df["company_id"] = None
+
+    # Iterate through each company in the Eudra dataset
+    for index, eudra_row in eudra_df.iterrows():
+        matched = False
+
+        # Check for matches in the companies table
+        for _, company_row in companies_df.iterrows():
+            if is_similar({
+                "company_name": eudra_row["Site Name"],
+                "address": eudra_row["Site Address"],
+                "locality": eudra_row["City"],
+                "region": None,  # Region is not provided in the Eudra dataset
+                "postal_code": eudra_row["Postcode"],
+                "country": eudra_row["Country"]
+            }, company_row):
+                # If a match is found, assign the existing company_id
+                eudra_df.at[index, "company_id"] = company_row["company_id"]
+                matched = True
+                break
+
+        if not matched:
+            # If no match is found, create a new company entry
+            new_company_id = generate_company_id()
+            eudra_df.at[index, "company_id"] = new_company_id
+
+            # Add the new company to the companies table
+            new_company = {
+                "company_id": new_company_id,
+                "company_name": eudra_row["Site Name"],
+                "address": eudra_row["Site Address"],
+                "locality": eudra_row["City"],
+                "region": None,
+                "postal_code": eudra_row["Postcode"],
+                "country": eudra_row["Country"],
+                "oms_organisation_id": eudra_row["OMS Organisation Identifier"],
+                "oms_location_id": eudra_row["OMS Location Identifier"]
+            }
+            companies_df = pd.concat([companies_df, pd.DataFrame([new_company])], ignore_index=True)
+
+    return eudra_df, companies_df
+
+# Cross-reference both datasets
+updated_warning_letters_df, companies_df = cross_reference_warning_letters(warning_letters_df, companies_df)
+updated_eudra_df, companies_df = cross_reference_eudra(eudra_df, companies_df)
+
+# Display the updated datasets
+print("Updated Warning Letters:")
+print(updated_warning_letters_df)
+
+print("\nUpdated Eudra Non-Compliance Reports:")
+print(updated_eudra_df)
+
+print("\nUpdated Companies Table:")
+print(companies_df)

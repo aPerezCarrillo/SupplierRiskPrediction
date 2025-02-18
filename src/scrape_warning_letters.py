@@ -12,7 +12,7 @@ import pandas as pd
 FDA_WARNING_LETTERS_URL = "https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/compliance-actions-and-activities/warning-letters?search_api_fulltext=&search_api_fulltext_issuing_office=&field_letter_issue_datetime=All&field_change_date_closeout_letter=&field_change_date_response_letter=&field_change_date_2=All&field_letter_issue_datetime_2=&export=yes"
 
 # Directory to save downloaded letters
-DOWNLOAD_DIR = "../data/warning_letters"
+DATA_DIR = "../data/warning_letters"
 WARNING_LETTER_TABLE_FN = "warning_letters_table.csv"
 
 METADATA_LABELS = ["Delivery Method:", "Reference #:", "Product:", "Issuing Office:"]
@@ -172,7 +172,7 @@ def extract_metadata_and_text_from_html(file_path):
 # Defining main function
 def main():
     # Scrape the warning letters table and save the data
-    file_path = DOWNLOAD_DIR + os.sep + WARNING_LETTER_TABLE_FN
+    file_path = DATA_DIR + os.sep + WARNING_LETTER_TABLE_FN
     if os.path.exists(file_path):
         warning_letters_df =  pd.read_csv(file_path)
     else:
@@ -182,7 +182,7 @@ def main():
     # Add metadata and letter text to the DataFrame
     metadata_list = []
     for i, row in warning_letters_df.iterrows():
-        html_file_path = DOWNLOAD_DIR + os.sep +  'warning_letter_' + str(i+1) + '.html'
+        html_file_path = DATA_DIR + os.sep + 'warning_letter_' + str(i + 1) + '.html'
         metadata = extract_metadata_and_text_from_html(html_file_path)
         if metadata:
             metadata_list.append(metadata)
@@ -193,7 +193,7 @@ def main():
     final_df = pd.concat([warning_letters_df, metadata_df], axis=1)
 
     # Save the final DataFrame to a CSV file
-    final_df.to_csv(DOWNLOAD_DIR + os.sep +  "warning_letters_with_metadata.csv", index=False)
+    final_df.to_csv(DATA_DIR + os.sep + "warning_letters_with_metadata.csv", index=False)
     print("Warning letters with metadata saved to warning_letters_with_metadata.csv")
 
 def trend_analysis(warning_letters_df):

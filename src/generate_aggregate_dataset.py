@@ -113,7 +113,7 @@ print("\nHistorical Records Data:")
 print(historical_data.head())
 
 # Save to CSV for further use
-output_path = "../data/historical_ds/"
-final_data.to_csv(output_path + "aggregated_supplier_data_with_target.csv", index=False)
+DATA_FOLDER = "../data/historical_ds/"
+final_data.to_csv(DATA_FOLDER + "aggregated_supplier_data_with_target.csv", index=False)
 print(final_data["ncr_or_warning_letter"].value_counts())
-historical_data.to_csv(output_path + "historical_records_data_with_dates.csv", index=False)
+historical_data.to_csv(DATA_FOLDER + "historical_records_data_with_dates.csv", index=False)

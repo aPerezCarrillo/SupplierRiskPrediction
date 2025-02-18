@@ -94,6 +94,6 @@ final_sliding_window_data = pd.concat(sliding_window_data, ignore_index=True)
 print(final_sliding_window_data.head())
 
 # Save to CSV for further use
-output_path = "../data/historical_ds/"
-final_sliding_window_data.to_csv(output_path + "sliding_window_supplier_data_with_target.csv", index=False)
+DATA_FOLDER = "../data/historical_ds/"
+final_sliding_window_data.to_csv(DATA_FOLDER + "sliding_window_supplier_data_with_target.csv", index=False)
 print(final_sliding_window_data["ncr_or_warning_letter"].value_counts())
